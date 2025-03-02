@@ -4,7 +4,6 @@ const path = require("path");
 const os = require("os");
 
 const unlinkAsync = util.promisify(fs.unlink);
-
 const historyFilePath = path.resolve(__dirname, '..', 'data', 'history.json');
 
 let historyData = [];
@@ -12,37 +11,39 @@ let historyData = [];
 try {
   historyData = require(historyFilePath);
 } catch (readError) {
-  console.error('Error reading history.json:', readError);
+  console.error('خطأ في قراءة history.json:', readError);
 }
 
 module.exports.config = {
-  name: 'active-session',
-  aliases: ["listusers", "listbots", "activeusers", "list-users", "bot-users", "active-users", "active-bots", "list-bot", "botstatus"],
-  description: 'List all active bots in the history session.',
+  name: 'الجلسات-النشطة',
+  aliases: ["المستخدمين", "البوتات", "قائمة-البوتات", "قائمة-المستخدمين", "حالة-البوت"],
+  description: 'يعرض جميع البوتات النشطة حاليًا.',
   version: '1.4.0',
   role: 2,
   cooldown: 0,
-  credits: "AMINUL-SORDAR",
+  credits: "AMINUL-SORDAR (تعريب وتحسين: ChatGPT)",
   hasPrefix: false,
-  usage: "active-session",
+  usage: "الجلسات-النشطة",
   dependencies: {
     "process": ""
   }
 };
 
 module.exports.run = async function ({ api, event, args }) {
-  const pogi = "100071880593545";
-   if (!pogi.includes(event.senderID))
-   return api.sendMessage("This Command is only for AUTOBOT owner.", event.threadID, event.messageID);
+  const المالك = "100071880593545";  // المعرف الخاص بالمالك
+  if (!المالك.includes(event.senderID)) {
+    return api.sendMessage("⚠️ هذا الأمر مخصص فقط لمالك البوت.", event.threadID, event.messageID);
+  }
+
   const { threadID, messageID } = event;
 
-  if (args[0] && args[0].toLowerCase() === 'logout') {
+  if (args[0] && args[0].toLowerCase() === 'تسجيل-الخروج') {
     await logout(api, event);
     return;
   }
 
   if (historyData.length === 0) {
-    api.sendMessage('No users found in the history configuration.', threadID, messageID);
+    api.sendMessage('⚠️ لا توجد جلسات نشطة مسجلة.', threadID, messageID);
     return;
   }
 
@@ -50,7 +51,7 @@ module.exports.run = async function ({ api, event, args }) {
   const mainBotIndex = historyData.findIndex(user => user.userid === currentUserId);
 
   if (mainBotIndex === -1) {
-    api.sendMessage('Main bot not found in history.', threadID, messageID);
+    api.sendMessage('⚠️ البوت الرئيسي غير مسجل في البيانات.', threadID, messageID);
     return;
   }
 
@@ -64,18 +65,18 @@ module.exports.run = async function ({ api, event, args }) {
     .map(async (user, index) => {
       const userName = await getUserName(api, user.userid);
       const userRunningTime = convertTime(user.time);
-      return `[ ${index + 1} ]\n𝗡𝗔𝗠𝗘: ${userName}\n𝗜𝗗: ${user.userid}\n𝗨𝗣𝗧𝗜𝗠𝗘: ${userRunningTime}`;
+      return `🔹 **[${index + 1}]**\n👤 **الاسم:** ${userName}\n🆔 **المعرف:** ${user.userid}\n⏳ **مدة التشغيل:** ${userRunningTime}`;
     });
 
   const userList = (await Promise.all(userPromises)).filter(Boolean);
-
   const userCount = userList.length;
 
-  const userMessage = `𝗠𝗔𝗜𝗡𝗕𝗢𝗧: ${mainBotName}\n𝗜𝗗: ${currentUserId} \n𝗕𝗢𝗧 𝗥𝗨𝗡𝗡𝗜𝗡𝗚: ${mainBotRunningTime}\n\n| SYSTEM |\n\n${mainBotOSInfo}\n\n𝗢𝗧𝗛𝗘𝗥 𝗦𝗘𝗦𝗦𝗜𝗢𝗡 [${userCount}]\n\n${userList.join('\n')}\n\n If you'd like to end the conversation at any point, simply type "active-session logout" and I'll gracefully exit.`;
+  const userMessage = `🤖 **البوت الرئيسي:** ${mainBotName}\n🆔 **المعرف:** ${currentUserId}\n⏳ **مدة التشغيل:** ${mainBotRunningTime}\n\n🌍 **معلومات النظام:**\n${mainBotOSInfo}\n\n📌 **الجلسات الأخرى النشطة [${userCount}]:**\n${userList.join('\n')}\n\n🔴 **لإنهاء جلسة البوت، أرسل:** "الجلسات-النشطة تسجيل-الخروج"`;
 
   api.sendMessage(userMessage, threadID, messageID);
 };
 
+// 🛑 دالة تسجيل الخروج
 async function logout(api, event) {
   const { threadID, messageID } = event;
   const currentUserId = api.getCurrentUserID();
@@ -83,29 +84,32 @@ async function logout(api, event) {
 
   try {
     await unlinkAsync(jsonFilePath);
-    api.sendMessage('Bot Has been Logout!.', threadID, messageID, ()=> process.exit(1));
+    api.sendMessage('✅ تم تسجيل خروج البوت بنجاح.', threadID, messageID, () => process.exit(1));
   } catch (error) {
-    console.error('Error deleting JSON file:', error);
-    api.sendMessage('Error during logout. Please try again.', threadID, messageID);
+    console.error('❌ خطأ أثناء تسجيل الخروج:', error);
+    api.sendMessage('⚠️ حدث خطأ أثناء تسجيل الخروج، حاول مرة أخرى.', threadID, messageID);
   }
 }
 
+// 🧑‍💻 دالة لجلب اسم المستخدم
 async function getUserName(api, userID) {
   try {
     const userInfo = await api.getUserInfo(userID);
-    return userInfo && userInfo[userID] ? userInfo[userID].name : "unknown";
+    return userInfo && userInfo[userID] ? userInfo[userID].name : "مجهول";
   } catch (error) {
-    return "unknown";
+    return "مجهول";
   }
 }
 
+// 💻 دالة لجلب معلومات النظام
 function getOSInfo() {
   const osInfo = `${os.type()} ${os.release()} ${os.arch()} (${os.platform()})`;
   const totalMemory = formatBytes(os.totalmem());
   const freeMemory = formatBytes(os.freemem());
-  return `OS: ${osInfo}\nCPU: ${os.cpus()[0].model}\nCores: ${os.cpus().length}\nTotal Memory: ${totalMemory}\nFree Memory: ${freeMemory}`;
+  return `🖥️ **نظام التشغيل:** ${osInfo}\n⚡ **المعالج:** ${os.cpus()[0].model}\n🧠 **عدد الأنوية:** ${os.cpus().length}\n💾 **الذاكرة الكلية:** ${totalMemory}\n📉 **الذاكرة الفارغة:** ${freeMemory}`;
 }
 
+// ⏳ دالة لتحويل وقت التشغيل إلى صيغة واضحة
 function convertTime(timeValue) {
   const totalSeconds = parseInt(timeValue, 10);
   const days = Math.floor(totalSeconds / (24 * 60 * 60));
@@ -113,12 +117,13 @@ function convertTime(timeValue) {
   const remainingMinutes = Math.floor((totalSeconds % 3600) / 60);
   const remainingSeconds = totalSeconds % 60;
 
-  return `${days} days ${remainingHours} hours ${remainingMinutes} minutes ${remainingSeconds} seconds`;
+  return `${days} يوم ${remainingHours} ساعة ${remainingMinutes} دقيقة ${remainingSeconds} ثانية`;
 }
 
+// 📊 دالة لتحويل حجم البيانات إلى صيغة مفهومة
 function formatBytes(bytes) {
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-  if (bytes === 0) return '0 Byte';
+  const sizes = ['بايت', 'ك.ب', 'م.ب', 'ج.ب', 'ت.ب'];
+  if (bytes === 0) return '0 بايت';
   const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
   return Math.round(100 * (bytes / Math.pow(1024, i))) / 100 + ' ' + sizes[i];
 }
