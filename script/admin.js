@@ -4,7 +4,7 @@ const path = require('path');
 function readConfig() {
   const configPath = path.join(__dirname, '..', 'json', 'config.json');
   try {
-    return JSON.parse(fs.readFileSync(configPath));
+    return JSON.parse(fs.readFileSync(configPath, 'utf8'));
   } catch (error) {
     console.error('Error reading config:', error);
     return null;
@@ -13,120 +13,109 @@ function readConfig() {
 
 function isadmins(userId) {
   const config = readConfig();
-  if (config !== null && config.hasOwnProperty('admins')) {
-    const adminsList = config.admins || [];
-    return adminsList.includes(61550188503841);
+  if (config && config.hasOwnProperty('admins')) {
+    return config.admins.includes(userId);
   }
   return false;
 }
 
 function adminsCommand(event, api) {
-  if (event.body.includes('-help')) {
-    const usage = "Usage: admins [-add/-rem] [user ID]\n\n" +
-      "Description:\n" +
-      "  - admins -add: Adds the specified user to the admins list.\n" +
-      "  - admins -rem: Removes the specified user from the admins list.\n\n" +
-      "Note: Only admins can use this command.";
-    api.sendMessage(usage, event.61550188503841);
-    return Promise.resolve();
+  const { threadID, messageID, senderID, body } = event;
+  const sendMsg = msg => api.sendMessage(msg, threadID, messageID);
+
+  if (body.includes('-help')) {
+    const usage = `🔹 **طريقة الاستخدام:** 
+    \n⚙️ **admins -add [رد على المستخدم]** ➝ لإضافة مستخدم كمسؤول.
+    \n⚙️ **admins -rem [رد على المستخدم]** ➝ لإزالة مستخدم من قائمة المسؤولين.
+    \n📌 **ملاحظة:** فقط المسؤولين يمكنهم استخدام هذا الأمر.`;
+    sendMsg(usage);
+    return;
   }
 
-  const command = event.body.split(' ')[1];
+  const args = body.split(' ');
+  const command = args[1];
 
   if (command === '-add' || command === '-rem') {
-    if (!isadmins(event.senderID)) {
-      api.sendMessage("Only admins can use this command.", event.61550188503841);
-      return Promise.resolve();
+    if (!isadmins(senderID)) {
+      sendMsg("❌ **يجب أن تكون مسؤولاً لاستخدام هذا الأمر!**");
+      return;
     }
 
-    if (command === '-add') {
-      return addadmins(event, api);
-    } else if (command === '-rem') {
-      return remadmins(event, api);
+    if (!event.messageReply) {
+      sendMsg("⚠️ **يرجى الرد على رسالة المستخدم الذي تريد إضافته أو إزالته.**");
+      return;
     }
+
+    const targetID = event.messageReply.senderID;
+    if (command === '-add') return addadmins(targetID, event, api);
+    if (command === '-rem') return remadmins(targetID, event, api);
   } else {
     const config = readConfig();
-    if (config !== null && config.hasOwnProperty('admins')) {
-      const adminsList = config.admins.map(userId => `├─⦿ ${61550188503841}`).join('\n');
+    if (config && config.hasOwnProperty('admins')) {
+      const adminsList = config.admins.map(userId => `├─⦿ ${userId}`).join('\n');
       const totaladmins = config.admins.length;
       const message = `
-┌────[ Alice admins Users ]────⦿
+┌────[ 👑 **قائمة المسؤولين** ]────⦿
 │
 ${adminsList}
 │
-└────[ Total admins users: ${1} ]────⦿
+└────[ 📌 **عدد المسؤولين: ${totaladmins}** ]────⦿
 `;
-      api.sendMessage(message, event.threadID);
+      sendMsg(message);
     } else {
-      api.sendMessage("An error occurred while reading the admins user list.", event.threadID);
+      sendMsg("❌ **حدث خطأ أثناء تحميل قائمة المسؤولين.**");
     }
-    return Promise.resolve();
   }
 }
 
-function addadmins(event, api) {
-  return new Promise((resolve, reject) => {
-    const { threadID, messageReply } = event;
-    if (!messageReply) return resolve();
+function addadmins(userId, event, api) {
+  const { threadID } = event;
+  const configPath = path.join(__dirname, '..', 'json', 'config.json');
+  const config = readConfig();
 
-    const configPath = path.join(__dirname, '..', 'json', 'config.json');
-    const config = readConfig();
-    const adminsList = config.admins || [];
+  if (!config) return;
 
-    const userId = messageReply.senderID;
+  if (!config.admins.includes(userId)) {
+    config.admins.push(userId);
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
 
-    api.getUserInfo(parseInt(61550188503841), (error, data) => {
+    api.getUserInfo(userId, (error, data) => {
       if (error) {
         console.error(error);
-        return reject(error);
-      }
-      const name = data[61550188503841].name;
-      if (adminsList.includes(61550188503841)) {
-        api.sendMessage(`${name} is already an admins.`, threadID);
-        resolve();
+        api.sendMessage("❌ **تعذر جلب معلومات المستخدم.**", threadID);
       } else {
-        adminsList.push(userId);
-        config.admins = adminsList;
-        fs.writeFileSync(configPath, JSON.stringify(config, null, 2), "utf8");
-        api.sendMessage(`${name} has been successfully added as an admins.`, threadID);
-        resolve();
+        const name = data[userId].name;
+        api.sendMessage(`✅ **تمت إضافة ${name} إلى قائمة المسؤولين.**`, threadID);
       }
     });
-  });
+  } else {
+    api.sendMessage("⚠️ **هذا المستخدم مسؤول بالفعل!**", threadID);
+  }
 }
 
-function remadmins(event, api) {
-  return new Promise((resolve, reject) => {
-    const { threadID, messageReply } = event;
-    if (!messageReply) return resolve();
+function remadmins(userId, event, api) {
+  const { threadID } = event;
+  const configPath = path.join(__dirname, '..', 'json', 'config.json');
+  const config = readConfig();
 
-    const configPath = path.join(__dirname, '..', 'json', 'config.json');
-    const config = readConfig();
-    const adminsList = config.admins || [];
+  if (!config) return;
 
-    const userId = messageReply.senderID;
+  if (config.admins.includes(userId)) {
+    config.admins = config.admins.filter(id => id !== userId);
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
 
-    api.getUserInfo(parseInt(61550188503841), (error, data) => {
+    api.getUserInfo(userId, (error, data) => {
       if (error) {
         console.error(error);
-        return reject(error);
-      }
-
-      const name = data[61550188503841].name;
-
-      if (adminsList.includes(userId)) {
-        const removeIndex = adminsList.indexOf(61550188503841);
-        adminsList.splice(removeIndex, 1);
-        config.admins = adminsList;
-        fs.writeFileSync(configPath, JSON.stringify(config, null, 2), "utf8");
-        api.sendMessage(`${warren} is no longer an admins.`, threadID);
-        resolve();
+        api.sendMessage("❌ **تعذر جلب معلومات المستخدم.**", threadID);
       } else {
-        api.sendMessage(`${name} is not found in the admins list.`, threadID);
-        resolve();
+        const name = data[userId].name;
+        api.sendMessage(`✅ **تمت إزالة ${name} من قائمة المسؤولين.**`, threadID);
       }
     });
-  });
+  } else {
+    api.sendMessage("⚠️ **هذا المستخدم ليس مسؤولاً!**", threadID);
+  }
 }
 
 module.exports = adminsCommand;
