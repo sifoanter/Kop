@@ -2,11 +2,11 @@ const axios = require('axios');
 
 module.exports.config = {
   name: 'ai',
-  version: '1.0.0',
+  version: '1.0.1',
   hasPermission: 0,
   usePrefix: false,
   aliases: ['gpt', 'openai'],
-  description: "An AI command powered by GPT-4",
+  description: "AI chatbot using OpenAI API",
   usages: "ai [prompt]",
   credits: 'Developer',
   cooldowns: 3,
@@ -16,48 +16,60 @@ module.exports.config = {
 };
 
 module.exports.run = async function({ api, event, args }) {
-  const input = args.join(' ');
+  const input = args.join(' ').trim();
 
   if (!input) {
-    return api.sendMessage(`Please provide a question or statement after 'ai'. For example: 'ai What is the capital of France?'`, event.threadID, event.messageID);
+    return api.sendMessage(`❌ **يرجى كتابة سؤال بعد 'ai'**\n🔹 **مثال:** ai ما هي عاصمة فرنسا؟`, event.threadID, event.messageID);
   }
 
-  if (input === "clear") {
+  // 🧹 **حذف المحادثة (Clear)**
+  if (input.toLowerCase() === "clear") {
     try {
-      await axios.post('https://gaypt4ai.onrender.com/clear', { id: event.senderID });
-      return api.sendMessage("Chat history has been cleared.", event.threadID, event.messageID);
+      const response = await axios.post('https://موثوق_api.com/clear', { id: event.senderID });
+      
+      if (response.status === 200) {
+        return api.sendMessage("✅ **تم مسح المحادثة بنجاح!**", event.threadID, event.messageID);
+      } else {
+        return api.sendMessage("⚠️ **لم يتم تنفيذ الطلب بنجاح، حاول مجددًا.**", event.threadID, event.messageID);
+      }
+      
     } catch (error) {
       console.error(error);
-      return api.sendMessage('An error occurred while clearing the chat history.', event.threadID, event.messageID);
+      return api.sendMessage('❌ **حدث خطأ أثناء مسح المحادثة.**', event.threadID, event.messageID);
     }
   }
 
-
+  // ⏳ **إرسال رسالة انتظار**
   let chatInfoMessageID = "";
-  
-  api.sendMessage(`🔍 "${input}"`, event.threadID, (error, chatInfo) => {
-    chatInfoMessageID = chatInfo.messageID;
-  },event.messageID);
+  api.sendMessage(`🤖 **يتم المعالجة...**\n🔍 *"${input}"*`, event.threadID, (error, chatInfo) => {
+    if (!error) {
+      chatInfoMessageID = chatInfo.messageID;
+    }
+  }, event.messageID);
 
   try {
-    const url = (event.type === "message_reply" && event.messageReply.attachments[0]?.type === "photo")
-      ? { link: event.messageReply.attachments[0].url }
-      : {};
+    // 🔹 **التعامل مع الصور (إذا كانت موجودة)**
+    const imageUrl = (event.type === "message_reply" && event.messageReply.attachments[0]?.type === "photo") 
+      ? event.messageReply.attachments[0].url 
+      : null;
 
-    const { data } = await axios.post('https://gays-porno-api.onrender.com/chat', {
+    // 📡 **إرسال الطلب إلى API موثوق**
+    const { data } = await axios.post('https://موثوق_api.com/chat', {
       prompt: input,
-      customId: event.senderID,
-      ...url
+      userId: event.senderID,
+      image: imageUrl
     });
 
-    api.editMessage(`${data.message}`, chatInfoMessageID, (err) => {
+    // ✅ **تعديل الرسالة بالرد من الذكاء الاصطناعي**
+    api.editMessage(`🤖 **AI:** ${data.message}`, chatInfoMessageID, (err) => {
       if (err) {
         console.error(err);
+        api.sendMessage(`✅ **الرد:**\n${data.message}`, event.threadID, event.messageID);
       }
     });
 
   } catch (error) {
     console.error(error);
-    return api.sendMessage('An error occurred while processing your request.', event.threadID, event.messageID);
+    api.sendMessage('❌ **حدث خطأ أثناء معالجة الطلب.**', event.threadID, event.messageID);
   }
 };
