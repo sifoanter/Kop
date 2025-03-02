@@ -1,39 +1,51 @@
+const axios = require("axios");
+const fs = require("fs-extra");
+const { alldown } = require("nayan-videos-downloader");
+
 module.exports = {
-  config:{
+  config: {
     name: "auto",
-    version: "0.0.2",
+    version: "0.0.3",
     permission: 0,
     prefix: true,
     credits: "Nayan",
-    description: "auto video download",
+    description: "تحميل الفيديوهات تلقائيًا",
     category: "user",
     usages: "",
     cooldowns: 5,
-},
-start: async function({ nayan, events, args }) {},
-handleEvent: async function ({ api, event, args }) {
-    const axios = require("axios")
-    const request = require("request")
-    const fs = require("fs-extra")
-  const content = event.body ? event.body : '';
-  const body = content.toLowerCase();
-  const {alldown} = require("nayan-videos-downloader")
-  if (body.startsWith("https://")) {
-  api.setMessageReaction("🔍", event.messageID, (err) => {}, true);
-const data = await alldown(content);
-  console.log(data)
-  const {low, high, title} = data.data;
-    api.setMessageReaction("✔️", event.messageID, (err) => {}, true);
-  const video = (await axios.get(high, {
-      responseType: "arraybuffer",
-    })).data;
-    fs.writeFileSync(__dirname + "/cache/auto.mp4", Buffer.from(video, "utf-8"))
+  },
 
-        return api.sendMessage({
-            body: `《TITLE》: ${title}`,
-            attachment: fs.createReadStream(__dirname + "/cache/auto.mp4")
+  handleEvent: async function ({ api, event }) {
+    try {
+      const content = event.body ? event.body.trim() : "";
+      if (!content.startsWith("https://")) return;
 
-        }, event.threadID, event.messageID);
+      api.setMessageReaction("🔍", event.messageID, () => {}, true);
+
+      const data = await alldown(content);
+      if (!data || !data.data) throw new Error("فشل في جلب بيانات الفيديو!");
+
+      const { high, title } = data.data;
+      if (!high) throw new Error("لم يتم العثور على رابط فيديو بجودة عالية!");
+
+      // 🔹 تحميل الفيديو
+      const videoPath = __dirname + "/cache/auto.mp4";
+      const videoBuffer = (await axios.get(high, { responseType: "arraybuffer" })).data;
+      fs.writeFileSync(videoPath, Buffer.from(videoBuffer, "utf-8"));
+
+      api.setMessageReaction("✔️", event.messageID, () => {}, true);
+
+      // 🔹 إرسال الفيديو
+      api.sendMessage(
+        { body: `🎬 **العنوان:** ${title}`, attachment: fs.createReadStream(videoPath) },
+        event.threadID,
+        () => fs.unlinkSync(videoPath), // 🔹 حذف الملف بعد الإرسال
+        event.messageID
+      );
+
+    } catch (error) {
+      api.setMessageReaction("❌", event.messageID, () => {}, true);
+      api.sendMessage(`❌ **حدث خطأ أثناء تحميل الفيديو:**\n${error.message}`, event.threadID, event.messageID);
     }
-}
-}
+  },
+};
